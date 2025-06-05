@@ -1,0 +1,193 @@
+import javafx.application.Application; 
+import javafx.collections.*;
+import javafx.collections.transformation.FilteredList;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.layout.*;
+import javafx.stage.Stage;
+import models.Contacto;
+
+public class Main extends Application {
+
+    private final ObservableList<Contacto> listaContactos = FXCollections.observableArrayList();
+    private final ObservableList<String> categoriasContactos = FXCollections.observableArrayList("Familia", "Trabajo", "Amigos");
+
+    @Override
+    public void start(Stage ventanaPrincipal) {
+
+        TableView<Contacto> tablaContactos = new TableView<>();
+        
+        TableColumn<Contacto, String> columnaNombre = new TableColumn<>("Nombre");
+        columnaNombre.setCellValueFactory(new PropertyValueFactory<>("nombre"));
+
+        TableColumn<Contacto, String> columnaTelefono = new TableColumn<>("Teléfono");
+        columnaTelefono.setCellValueFactory(new PropertyValueFactory<>("telefono"));
+
+        TableColumn<Contacto, String> columnaCorreo = new TableColumn<>("Correo");
+        columnaCorreo.setCellValueFactory(new PropertyValueFactory<>("correo"));
+
+        TableColumn<Contacto, String> columnaCategoria = new TableColumn<>("Etiqueta");
+        columnaCategoria.setCellValueFactory(new PropertyValueFactory<>("etiqueta"));
+
+        tablaContactos.getColumns().addAll(columnaNombre, columnaTelefono, columnaCorreo, columnaCategoria);
+
+        FilteredList<Contacto> listaContactosFiltrados = new FilteredList<>(listaContactos, p -> true);
+        tablaContactos.setItems(listaContactosFiltrados);
+
+        TextField campoBuscarNombre = new TextField();
+        campoBuscarNombre.setPromptText("Buscar por nombre");
+
+        ComboBox<String> comboCategorias = new ComboBox<>();
+        comboCategorias.getItems().add("Todos");
+        comboCategorias.getItems().addAll(categoriasContactos);
+        comboCategorias.setValue("Todos");
+
+        campoBuscarNombre.textProperty().addListener((obs, oldVal, newVal) -> {
+            aplicarFiltro(listaContactosFiltrados, campoBuscarNombre.getText(), comboCategorias.getValue());
+        });
+
+        comboCategorias.valueProperty().addListener((obs, oldVal, newVal) -> {
+            aplicarFiltro(listaContactosFiltrados, campoBuscarNombre.getText(), comboCategorias.getValue());
+        });
+
+        Button botonAgregarContacto = new Button("Agregar");
+        Button botonEditarContacto = new Button("Editar");
+        Button botonEliminarContacto = new Button("Eliminar");
+
+        botonAgregarContacto.setOnAction(e -> agregarContacto());
+        botonEditarContacto.setOnAction(e -> editarContacto(tablaContactos));
+        botonEliminarContacto.setOnAction(e -> {
+            Contacto contactoSeleccionado = tablaContactos.getSelectionModel().getSelectedItem();
+            if (contactoSeleccionado != null) {
+                listaContactos.remove(contactoSeleccionado);
+            }else{
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Advertencia");
+            alert.setHeaderText("No hay contacto seleccionado");
+            alert.setContentText("Selecciona un contacto para eliminar.");
+            alert.showAndWait();
+            return;
+            }
+        });
+
+        HBox contenedorFiltros = new HBox(10, campoBuscarNombre, comboCategorias);
+        HBox contenedorBotones = new HBox(10, botonAgregarContacto, botonEditarContacto, botonEliminarContacto);
+        VBox contenedorPrincipal = new VBox(10, contenedorFiltros, tablaContactos, contenedorBotones);
+        contenedorPrincipal.setStyle("-fx-padding: 10;");
+
+        Scene scene = new Scene(contenedorPrincipal, 800, 600);
+        ventanaPrincipal.setTitle("Agenda de Contactos");
+        ventanaPrincipal.setScene(scene);
+        ventanaPrincipal.show();
+    }
+
+    private void aplicarFiltro(FilteredList<Contacto> listaFiltrada, String textoBusqueda, String categoriaSeleccionada) {
+        listaFiltrada.setPredicate(contacto -> {
+            boolean coincideNombre = contacto.getNombre().toLowerCase().contains(textoBusqueda.toLowerCase());
+            boolean coincideCategoria = categoriaSeleccionada.equals("Todos") || contacto.getEtiqueta().equalsIgnoreCase(categoriaSeleccionada);
+            return coincideNombre && coincideCategoria;
+        });
+    }
+
+    private void agregarContacto() {
+        Dialog<Contacto> dialogoContacto = new Dialog<>();
+        dialogoContacto.setTitle("Agregar Contacto");
+
+        TextField campoNombre = new TextField();
+        TextField campoTelefono = new TextField();
+        TextField campoCorreo = new TextField();
+
+        ComboBox<String> comboCategoriaDialogo = new ComboBox<>(categoriasContactos);
+        comboCategoriaDialogo.setEditable(false);
+        if (!categoriasContactos.isEmpty()) {
+            comboCategoriaDialogo.setValue(categoriasContactos.get(0));
+        }
+
+        GridPane panelFormulario = new GridPane();
+        panelFormulario.setHgap(10); 
+        panelFormulario.setVgap(10);
+        panelFormulario.add(new Label("Nombre:"), 0, 0); 
+        panelFormulario.add(campoNombre, 1, 0);
+        panelFormulario.add(new Label("Teléfono:"), 0, 1); 
+        panelFormulario.add(campoTelefono, 1, 1);
+        panelFormulario.add(new Label("Correo:"), 0, 2); 
+        panelFormulario.add(campoCorreo, 1, 2);
+        panelFormulario.add(new Label("Etiqueta:"), 0, 3); 
+        panelFormulario.add(comboCategoriaDialogo, 1, 3);
+
+        dialogoContacto.getDialogPane().setContent(panelFormulario);
+        dialogoContacto.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        dialogoContacto.setResultConverter(button -> {
+            if (button == ButtonType.OK) {
+                return new Contacto(
+                    campoNombre.getText(),
+                    campoTelefono.getText(),
+                    campoCorreo.getText(),
+                    comboCategoriaDialogo.getValue()
+                );
+            }
+            return null;
+        });
+
+        dialogoContacto.showAndWait().ifPresent(listaContactos::add);
+    }
+
+    private void editarContacto(TableView<Contacto> tablaContactos) {
+        Contacto contactoSeleccionado = tablaContactos.getSelectionModel().getSelectedItem();
+        if (contactoSeleccionado == null) {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Advertencia");
+            alert.setHeaderText("No hay contacto seleccionado");
+            alert.setContentText("Selecciona un contacto para editar.");
+            alert.showAndWait();
+            return;
+        }
+
+        Dialog<Contacto> dialogoContacto = new Dialog<>();
+        dialogoContacto.setTitle("Editar Contacto");
+
+        TextField campoNombre = new TextField(contactoSeleccionado.getNombre());
+        TextField campoTelefono = new TextField(contactoSeleccionado.getTelefono());
+        TextField campoCorreo = new TextField(contactoSeleccionado.getCorreo());
+
+        ComboBox<String> comboCategoriaDialogo = new ComboBox<>(categoriasContactos);
+        comboCategoriaDialogo.setEditable(false);
+        comboCategoriaDialogo.setValue(contactoSeleccionado.getEtiqueta());
+
+        GridPane panelFormulario = new GridPane();
+        panelFormulario.setHgap(10); 
+        panelFormulario.setVgap(10);
+        panelFormulario.add(new Label("Nombre:"), 0, 0); 
+        panelFormulario.add(campoNombre, 1, 0);
+        panelFormulario.add(new Label("Teléfono:"), 0, 1); 
+        panelFormulario.add(campoTelefono, 1, 1);
+        panelFormulario.add(new Label("Correo:"), 0, 2); 
+        panelFormulario.add(campoCorreo, 1, 2);
+        panelFormulario.add(new Label("Etiqueta:"), 0, 3); 
+        panelFormulario.add(comboCategoriaDialogo, 1, 3);
+
+        dialogoContacto.getDialogPane().setContent(panelFormulario);
+        dialogoContacto.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        dialogoContacto.setResultConverter(button -> {
+            if (button == ButtonType.OK) {
+                return new Contacto(
+                    campoNombre.getText(),
+                    campoTelefono.getText(),
+                    campoCorreo.getText(),
+                    comboCategoriaDialogo.getValue()
+                );
+            }
+            return null;
+        });
+
+        dialogoContacto.showAndWait().ifPresent(contactoModificado -> {
+            int indiceContacto = listaContactos.indexOf(contactoSeleccionado);
+            if (indiceContacto >= 0) {
+                listaContactos.set(indiceContacto, contactoModificado);
+            }
+        });
+    }
+}
